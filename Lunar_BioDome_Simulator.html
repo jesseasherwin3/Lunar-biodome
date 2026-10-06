@@ -1,0 +1,534 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>NASA LEAF Lunar Bio-Dome Simulator</title>
+  <style>
+    :root {
+      --bg: #0b0f19;
+      --card-bg: #151d30;
+      --panel-border: #243456;
+      --accent: #2dd4bf;
+      --accent-warm: #f59e0b;
+      --text: #e2e8f0;
+      --text-muted: #94a3b8;
+      --good: #10b981;
+      --danger: #ef4444;
+      --co2: #94a3b8;
+      --o2: #38bdf8;
+      --h2o: #60a5fa;
+      --glucose: #f59e0b;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    body { background: var(--bg); color: var(--text); padding: 18px; line-height: 1.45; }
+    .container { max-width: 1040px; margin: 0 auto; }
+    
+    header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid var(--panel-border); padding-bottom: 12px; margin-bottom: 16px; }
+    .badge { background: #1e293b; border: 1px solid var(--accent); color: var(--accent); font-size: 0.75rem; font-weight: 700; text-transform: uppercase; padding: 4px 8px; border-radius: 4px; letter-spacing: 0.05em; }
+    h1 { font-size: 1.35rem; color: #fff; display: flex; align-items: center; gap: 8px; }
+    
+    .phase-bar { display: flex; gap: 10px; margin-bottom: 16px; }
+    .tab { flex: 1; padding: 10px 14px; background: #0f172a; border: 1px solid var(--panel-border); border-radius: 6px; font-size: 0.85rem; font-weight: 600; text-align: center; color: var(--text-muted); cursor: default; }
+    .tab.active { background: #1e293b; border-color: var(--accent); color: #fff; }
+    .tab.unlocked { cursor: pointer; color: var(--accent); }
+
+    .main-grid { display: grid; grid-template-columns: 340px 1fr; gap: 18px; }
+    @media (max-width: 820px) { .main-grid { grid-template-columns: 1fr; } }
+    
+    .panel { background: var(--card-bg); border: 1px solid var(--panel-border); border-radius: 8px; padding: 16px; }
+    .panel-title { font-size: 0.95rem; font-weight: 700; color: #fff; margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center; }
+    
+    .form-group { margin-bottom: 14px; }
+    label { display: block; font-size: 0.78rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-muted); margin-bottom: 5px; }
+    select, input[type=range] { width: 100%; }
+    select { background: #0f172a; border: 1px solid var(--panel-border); color: #fff; padding: 7px 10px; border-radius: 4px; font-size: 0.85rem; outline: none; }
+    
+    .range-wrap { display: flex; align-items: center; gap: 10px; }
+    .val-display { min-width: 44px; text-align: right; font-size: 0.8rem; font-family: monospace; color: var(--accent); }
+    
+    .sim-viewport { position: relative; background: #050811; border-radius: 8px; border: 1px solid var(--panel-border); min-height: 400px; display: flex; flex-direction: column; overflow: hidden; }
+    svg#schematic { width: 100%; height: 320px; display: block; }
+    
+    .gauges-bar { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; padding: 12px; background: #090e1a; border-top: 1px solid var(--panel-border); }
+    .gauge { background: #111827; border: 1px solid #1f2937; border-radius: 6px; padding: 8px; text-align: center; }
+    .gauge-label { font-size: 0.68rem; text-transform: uppercase; color: var(--text-muted); }
+    .gauge-val { font-size: 1.05rem; font-weight: 700; font-family: monospace; }
+    .gauge-sub { font-size: 0.65rem; color: #64748b; margin-top: 2px; }
+    
+    .status-banner { margin-top: 14px; padding: 10px 14px; border-radius: 6px; font-size: 0.82rem; display: flex; align-items: center; gap: 10px; }
+    .status-banner.warning { background: rgba(245, 158, 11, 0.15); border: 1px solid #f59e0b; color: #fcd34d; }
+    .status-banner.success { background: rgba(16, 185, 129, 0.15); border: 1px solid #10b981; color: #6ee7b7; }
+    
+    .btn { display: inline-flex; align-items: center; justify-content: center; width: 100%; padding: 10px; background: var(--accent); color: #042f2e; font-weight: 700; border-radius: 6px; border: none; cursor: pointer; font-size: 0.88rem; margin-top: 10px; text-decoration: none; transition: 0.15s; }
+    .btn:hover { filter: brightness(1.1); }
+    .btn:disabled { opacity: 0.45; cursor: not-allowed; }
+    .btn-secondary { background: #1e293b; color: #fff; border: 1px solid var(--panel-border); }
+    
+    .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.85); display: flex; align-items: center; justify-content: center; z-index: 100; padding: 20px; }
+    .modal-card { background: #0f172a; border: 2px solid var(--accent); border-radius: 10px; max-width: 600px; width: 100%; padding: 22px; max-height: 90vh; overflow-y: auto; }
+    .modal-card h2 { font-size: 1.25rem; color: #fff; margin-bottom: 12px; }
+    .cert-box { background: #020617; border: 1px dashed var(--accent); border-radius: 6px; padding: 14px; text-align: center; margin: 14px 0; }
+    .cert-code { font-size: 1.8rem; font-weight: 900; letter-spacing: 0.15em; color: var(--accent); font-family: monospace; }
+    
+    .checklist { margin: 14px 0; list-style: none; font-size: 0.85rem; }
+    .checklist li { margin-bottom: 6px; padding-left: 22px; position: relative; color: #cbd5e1; }
+    .checklist li::before { content: "☐"; position: absolute; left: 0; color: var(--accent); font-weight: bold; }
+    .hidden { display: none !important; }
+  </style>
+</head>
+<body>
+<div class="container">
+  <header>
+    <div>
+      <span class="badge">NASA LEAF Project • Lunar Bio-Dome</span>
+      <h1>Lunar Habitat Life-Support Simulator</h1>
+    </div>
+    <div id="mission-clock" style="font-family: monospace; font-size: 0.85rem; color: var(--text-muted);">SIM DAY: <span id="day-counter" style="color:#fff; font-weight:bold;">1</span></div>
+  </header>
+
+  <div class="phase-bar">
+    <div class="tab active" id="tab-p1">PHASE 1: Photosynthesis Only (NASA LEAF)</div>
+    <div class="tab" id="tab-p2">PHASE 2: Closed-Loop Symbiosis (Respiration)</div>
+  </div>
+
+  <div class="main-grid">
+    <!-- Controls Panel -->
+    <div class="panel">
+      <div class="panel-title">
+        <span id="control-title">Phase 1 Controls</span>
+        <span class="badge" id="mode-badge" style="font-size:0.65rem;">OPEN SYSTEM</span>
+      </div>
+
+      <!-- Crop Selection -->
+      <div class="form-group">
+        <label for="crop-select">Selected Plant Specimen</label>
+        <select id="crop-select">
+          <option value="A">Specimen A (High photosynthetic rate, high CO2 affinity)</option>
+          <option value="B">Specimen B (Balanced growth profile, resilient)</option>
+          <option value="C">Specimen C (High sugar producer, high H2O affinity)</option>
+        </select>
+      </div>
+
+      <!-- Phase 1 Valve Controls -->
+      <div id="p1-controls">
+        <div class="form-group">
+          <label>CO2 Valve Flow (ppm/hr)</label>
+          <div class="range-wrap">
+            <input type="range" id="co2-in" min="0" max="100" value="40">
+            <span class="val-display" id="co2-in-val">40</span>
+          </div>
+        </div>
+        <div class="form-group">
+          <label>H2O Nutrient Pump (mL/hr)</label>
+          <div class="range-wrap">
+            <input type="range" id="h2o-in" min="0" max="100" value="45">
+            <span class="val-display" id="h2o-in-val">45</span>
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Grow Light Intensity (%)</label>
+          <div class="range-wrap">
+            <input type="range" id="light-in" min="0" max="100" value="70">
+            <span class="val-display" id="light-in-val">70%</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Phase 2 Loop Controls -->
+      <div id="p2-controls" class="hidden">
+        <div class="form-group">
+          <label for="consumer-select">Respirating Organisms (Consumers)</label>
+          <select id="consumer-select">
+            <option value="microbes">Specimen X: Soil Microbes & Decomposers</option>
+            <option value="inverts">Specimen Y: Small Herbivorous Invertebrates</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Consumer Colony Size</label>
+          <div class="range-wrap">
+            <input type="range" id="consumer-density" min="1" max="10" value="4">
+            <span class="val-display" id="consumer-density-val">4x</span>
+          </div>
+          <p style="font-size:0.7rem; color:var(--text-muted); margin-top:3px;">Controls rate of cellular respiration (CO2 release & O2 intake).</p>
+        </div>
+        <div class="form-group">
+          <label>Light Photoperiod (%)</label>
+          <div class="range-wrap">
+            <input type="range" id="p2-light" min="0" max="100" value="70">
+            <span class="val-display" id="p2-light-val">70%</span>
+          </div>
+        </div>
+        <div class="form-group" style="background:#090e1a; padding:8px; border-radius:4px; border:1px solid #1f2937;">
+          <label style="margin:0; font-size:0.72rem; color:var(--accent);">Closed Duct Status</label>
+          <div style="font-size:0.75rem; color:#cbd5e1; margin-top:3px;">External storage tanks disconnected. Recycling 100% of gases & nutrients.</div>
+        </div>
+      </div>
+
+      <!-- Action Button -->
+      <button class="btn" id="main-btn" disabled>Awaiting Equilibrium...</button>
+      <button class="btn btn-secondary" id="reset-btn" style="margin-top:6px;">Reset Sim</button>
+    </div>
+
+    <!-- Interactive Schematic & Telemetry -->
+    <div class="sim-viewport">
+      <svg id="schematic" viewBox="0 0 700 340">
+        <defs>
+          <linearGradient id="skyGrad" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="#02040a"/>
+            <stop offset="100%" stop-color="#0b1329"/>
+          </linearGradient>
+          <linearGradient id="domeGrad" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="rgba(147, 197, 253, 0.45)"/>
+            <stop offset="85%" stop-color="rgba(147, 197, 253, 0.08)"/>
+          </linearGradient>
+        </defs>
+
+        <!-- Lunar Sky & Surface -->
+        <rect x="0" y="0" width="700" height="260" fill="url(#skyGrad)"/>
+        <!-- Earth in Sky -->
+        <circle cx="90" cy="50" r="18" fill="#1e3a8a"/>
+        <path d="M80 48 Q92 40 98 52 Q94 62 82 58 Z" fill="#10b981" opacity="0.8"/>
+        <!-- Stars -->
+        <circle cx="210" cy="30" r="1" fill="#fff" opacity="0.6"/>
+        <circle cx="340" cy="45" r="1.5" fill="#fff" opacity="0.8"/>
+        <circle cx="580" cy="35" r="1" fill="#fff" opacity="0.5"/>
+        <circle cx="490" cy="65" r="1.2" fill="#fff" opacity="0.7"/>
+
+        <!-- Lunar Regolith Surface -->
+        <path d="M0 260 Q180 250 350 255 T700 250 L700 340 L0 340 Z" fill="#334155"/>
+        <ellipse cx="220" cy="275" rx="30" ry="7" fill="#1e293b"/>
+        <ellipse cx="530" cy="285" rx="45" ry="9" fill="#1e293b"/>
+
+        <!-- External Inputs (Phase 1) -->
+        <g id="p1-input-tanks">
+          <!-- CO2 Tank -->
+          <rect x="35" y="160" width="40" height="85" rx="8" fill="#1e293b" stroke="#64748b" stroke-width="2"/>
+          <rect x="47" y="150" width="16" height="10" fill="#475569"/>
+          <text x="55" y="205" fill="#94a3b8" font-size="11" font-weight="bold" text-anchor="middle">CO2</text>
+          <!-- H2O Tank -->
+          <rect x="90" y="175" width="45" height="70" rx="8" fill="#1e293b" stroke="#3b82f6" stroke-width="2"/>
+          <rect x="105" y="167" width="15" height="8" fill="#2563eb"/>
+          <text x="112" y="213" fill="#60a5fa" font-size="11" font-weight="bold" text-anchor="middle">H2O</text>
+          <!-- Input Arrow into Dome -->
+          <path id="arrow-in" d="M140 205 L230 205" stroke="#38bdf8" stroke-width="3" stroke-dasharray="6,4" fill="none"/>
+          <polygon points="232,205 222,200 222,210" fill="#38bdf8"/>
+          <text x="180" y="195" fill="#38bdf8" font-size="10" text-anchor="middle">CO2 + H2O</text>
+        </g>
+
+        <!-- Phase 2 Left Pod: Consumer Habitat -->
+        <g id="p2-consumer-pod" class="hidden">
+          <ellipse cx="110" cy="255" rx="75" ry="12" fill="#1e293b"/>
+          <path d="M45 255 A65 65 0 0 1 175 255 Z" fill="url(#domeGrad)" stroke="#38bdf8" stroke-width="1.5"/>
+          <rect x="98" y="210" width="24" height="42" rx="4" fill="#475569"/>
+          <!-- Organism icon: Invertebrate/Worm/Microbe -->
+          <path d="M85 245 Q95 235 105 245 T125 245" stroke="#f59e0b" stroke-width="3" fill="none"/>
+          <circle cx="127" cy="245" r="2.5" fill="#f59e0b"/>
+          <text x="110" y="175" fill="#fcd34d" font-size="11" font-weight="bold" text-anchor="middle">CELLULAR RESPIRATION</text>
+          <text x="110" y="190" fill="#94a3b8" font-size="9" text-anchor="middle">Consumers</text>
+          <!-- Duct: Consumer CO2 -> Greenhouse -->
+          <path d="M140 215 Q200 170 260 215" stroke="#94a3b8" stroke-width="3" stroke-dasharray="6,4" fill="none"/>
+          <polygon points="262,215 252,210 254,222" fill="#94a3b8"/>
+          <text x="200" y="180" fill="#cbd5e1" font-size="10" font-weight="bold" text-anchor="middle">CO2 + H2O</text>
+        </g>
+
+        <!-- Center Bio-Dome (Greenhouse / Photosynthesis) -->
+        <g id="greenhouse">
+          <!-- Dome base plate -->
+          <ellipse cx="350" cy="260" rx="120" ry="16" fill="#1e293b"/>
+          <!-- Glass shell -->
+          <path d="M240 260 A110 110 0 0 1 460 260 Z" fill="url(#domeGrad)" stroke="#2dd4bf" stroke-width="2"/>
+          <line x1="350" y1="150" x2="350" y2="260" stroke="rgba(255,255,255,0.2)" stroke-width="1.5"/>
+          <line x1="240" y1="260" x2="460" y2="260" stroke="#0f172a" stroke-width="3"/>
+          
+          <!-- Grow Light Array -->
+          <rect x="320" y="155" width="60" height="8" rx="2" fill="#475569"/>
+          <polygon id="light-beam" points="320,163 380,163 420,250 280,250" fill="rgba(253, 224, 71, 0.22)"/>
+
+          <!-- Plant Specimen Graphic -->
+          <g id="plant-graphic" transform="translate(350, 255)">
+            <!-- Stem -->
+            <path d="M0 0 L0 -45" stroke="#15803d" stroke-width="4"/>
+            <!-- Leaves -->
+            <path d="M0 -20 Q-22 -35 -15 -10 Z" fill="#22c55e"/>
+            <path d="M0 -30 Q22 -45 15 -20 Z" fill="#16a34a"/>
+            <path d="M0 -40 Q-18 -55 -5 -35 Z" fill="#22c55e"/>
+            <path d="M0 -42 Q18 -57 5 -37 Z" fill="#4ade80"/>
+          </g>
+
+          <text x="350" y="132" fill="#2dd4bf" font-size="12" font-weight="bold" text-anchor="middle">PHOTOSYNTHESIS</text>
+          <text id="plant-label-svg" x="350" y="145" fill="#94a3b8" font-size="9" text-anchor="middle">Plant Specimen A</text>
+        </g>
+
+        <!-- External Outputs (Phase 1) -->
+        <g id="p1-output-tanks">
+          <!-- Arrow from Dome into Tanks -->
+          <path id="arrow-out" d="M470 205 L550 205" stroke="#10b981" stroke-width="3" stroke-dasharray="6,4" fill="none"/>
+          <polygon points="552,205 542,200 542,210" fill="#10b981"/>
+          <text x="510" y="195" fill="#10b981" font-size="10" text-anchor="middle">O2 + Sugar</text>
+          <!-- Oxygen Cylinder -->
+          <rect x="560" y="160" width="38" height="85" rx="8" fill="#1e293b" stroke="#38bdf8" stroke-width="2"/>
+          <rect x="571" y="152" width="16" height="8" fill="#0284c7"/>
+          <text x="579" y="205" fill="#38bdf8" font-size="11" font-weight="bold" text-anchor="middle">O2</text>
+          <!-- Glucose Storage Crate -->
+          <rect x="610" y="185" width="55" height="60" rx="4" fill="#1e293b" stroke="#f59e0b" stroke-width="2"/>
+          <text x="637" y="215" fill="#f59e0b" font-size="10" font-weight="bold" text-anchor="middle">GLUCOSE</text>
+          <text x="637" y="230" fill="#fbbf24" font-size="9" text-anchor="middle">(C6H12O6)</text>
+        </g>
+
+        <!-- Phase 2 Return Duct: Plants O2/Glucose -> Consumers -->
+        <g id="p2-return-duct" class="hidden">
+          <path d="M280 235 Q200 280 145 235" stroke="#10b981" stroke-width="3" stroke-dasharray="6,4" fill="none"/>
+          <polygon points="143,235 152,242 153,230" fill="#10b981"/>
+          <text x="210" y="278" fill="#34d399" font-size="10" font-weight="bold" text-anchor="middle">O2 + Glucose (Food)</text>
+        </g>
+      </svg>
+
+      <!-- Real-time Telemetry Gauges -->
+      <div class="gauges-bar">
+        <div class="gauge">
+          <div class="gauge-label">CO2 Level</div>
+          <div class="gauge-val" id="g-co2" style="color:var(--co2)">400 ppm</div>
+          <div class="gauge-sub" id="g-co2-sub">Target: 380-450</div>
+        </div>
+        <div class="gauge">
+          <div class="gauge-label">O2 Production</div>
+          <div class="gauge-val" id="g-o2" style="color:var(--o2)">21%</div>
+          <div class="gauge-sub" id="g-o2-sub">Life Support: 19-23%</div>
+        </div>
+        <div class="gauge">
+          <div class="gauge-label">Water Status</div>
+          <div class="gauge-val" id="g-h2o" style="color:var(--h2o)">Adequate</div>
+          <div class="gauge-sub" id="g-h2o-sub">Transpiration balanced</div>
+        </div>
+        <div class="gauge">
+          <div class="gauge-label">Biomass Rate</div>
+          <div class="gauge-val" id="g-rate" style="color:var(--glucose)">100%</div>
+          <div class="gauge-sub" id="g-rate-sub">Net Photosynthesis</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="status-banner warning" id="status-box">
+    <span>⚠️ Adjust CO2 and H2O input valves to stabilize photosynthetic production.</span>
+  </div>
+</div>
+
+<!-- Modal: Hand-drawn Verification Blueprint -->
+<div class="modal-overlay hidden" id="blueprint-modal">
+  <div class="modal-card">
+    <h2>🚀 Habitat Closed Loop Complete!</h2>
+    <p style="font-size:0.88rem; color:#94a3b8;">You have successfully converted an open, consumable-reliant lab into an enclosed, self-sustaining biological loop.</p>
+    
+    <div class="cert-box">
+      <div style="font-size:0.75rem; text-transform:uppercase; color:#94a3b8;">Student Verification Code</div>
+      <div class="cert-code" id="final-code">BIO-9182-MOON</div>
+      <div style="font-size:0.75rem; color:#64748b;">Record this code on your paper sketch to verify simulator completion.</div>
+    </div>
+
+    <p style="font-size:0.85rem; font-weight:600; color:#fff; margin-top:12px;">Final Step: Draw Your Habitat Schematic on Paper</p>
+    <ul class="checklist">
+      <li><strong>Hand-drawn and fully colored:</strong> Must be drawn on paper (take a photo/scan to submit).</li>
+      <li><strong>Include your Verification Code:</strong> Write your unique code at the very top of your paper.</li>
+      <li><strong>All 5 Key Substances Labeled:</strong> Oxygen (O2), Carbon Dioxide (CO2), Water (H2O), Glucose (C6H12O6), and Light Energy & Chemical Energy (ATP).</li>
+      <li><strong>Directional Flow Arrows:</strong> Color-coded arrows clearly connecting producers and consumers in an endless closed loop.</li>
+      <li><strong>Written Reflection:</strong> Answer the 3 questions on the back (The Loop, Moon Challenges, and Terrarium Connection).</li>
+    </ul>
+
+    <button class="btn" onclick="document.getElementById('blueprint-modal').classList.add('hidden')">Back to Simulator</button>
+  </div>
+</div>
+
+<script>
+  let currentPhase = 1;
+  let p1Unlocked = false;
+  let p2Balanced = false;
+  let simDay = 1;
+  let stabilityCounter = 0;
+
+  // DOM Elements
+  const co2In = document.getElementById('co2-in');
+  const h2oIn = document.getElementById('h2o-in');
+  const lightIn = document.getElementById('light-in');
+  const cropSelect = document.getElementById('crop-select');
+  const consumerSelect = document.getElementById('consumer-select');
+  const consumerDensity = document.getElementById('consumer-density');
+  const p2Light = document.getElementById('p2-light');
+
+  const gCo2 = document.getElementById('g-co2');
+  const gO2 = document.getElementById('g-o2');
+  const gH2o = document.getElementById('g-h2o');
+  const gRate = document.getElementById('g-rate');
+  const statusBox = document.getElementById('status-box');
+  const mainBtn = document.getElementById('main-btn');
+  const tabP1 = document.getElementById('tab-p1');
+  const tabP2 = document.getElementById('tab-p2');
+
+  function updateDisplays() {
+    document.getElementById('co2-in-val').textContent = co2In.value;
+    document.getElementById('h2o-in-val').textContent = h2oIn.value;
+    document.getElementById('light-in-val').textContent = lightIn.value + '%';
+    document.getElementById('consumer-density-val').textContent = consumerDensity.value + 'x';
+    document.getElementById('p2-light-val').textContent = p2Light.value + '%';
+    document.getElementById('plant-label-svg').textContent = 'Plant Specimen ' + cropSelect.value;
+  }
+
+  function simulate() {
+    updateDisplays();
+
+    if (currentPhase === 1) {
+      const co2 = parseInt(co2In.value);
+      const h2o = parseInt(h2oIn.value);
+      const light = parseInt(lightIn.value);
+      const plant = cropSelect.value;
+
+      // Optimum profiles for anonymous plants
+      let optCo2 = 45, optH2o = 50;
+      if (plant === 'A') { optCo2 = 60; optH2o = 40; }
+      if (plant === 'C') { optCo2 = 35; optH2o = 65; }
+
+      const co2Diff = Math.abs(co2 - optCo2);
+      const h2oDiff = Math.abs(h2o - optH2o);
+
+      let netRate = Math.max(0, 100 - (co2Diff * 1.5) - (h2oDiff * 1.4));
+      if (light < 40) netRate *= (light / 40);
+
+      const simPpm = Math.round(300 + (co2 * 3.5));
+      const simO2 = (18 + (netRate / 100) * 4).toFixed(1);
+
+      gCo2.textContent = simPpm + ' ppm';
+      gO2.textContent = simO2 + '%';
+      gRate.textContent = Math.round(netRate) + '%';
+      
+      if (h2o < 25) { gH2o.textContent = 'Wilting (Low)'; gH2o.style.color = 'var(--danger)'; }
+      else if (h2o > 75) { gH2o.textContent = 'Flooded (High)'; gH2o.style.color = 'var(--danger)'; }
+      else { gH2o.textContent = 'Adequate'; gH2o.style.color = 'var(--h2o)'; }
+
+      if (netRate > 80 && h2o >= 25 && h2o <= 75) {
+        stabilityCounter++;
+        if (stabilityCounter >= 3) {
+          p1Unlocked = true;
+          statusBox.className = 'status-banner success';
+          statusBox.innerHTML = '✅ Photosynthesis stabilized! Output tanks filling with O2 and Glucose. Ready to unlock Phase 2.';
+          mainBtn.disabled = false;
+          mainBtn.textContent = 'Expand Bio-Dome (Enter Phase 2)';
+          tabP2.classList.add('unlocked');
+        } else {
+          statusBox.className = 'status-banner success';
+          statusBox.innerHTML = '⏳ Stabilizing lunar greenhouse... hold parameters steady (' + stabilityCounter + '/3 days)';
+        }
+      } else {
+        stabilityCounter = 0;
+        statusBox.className = 'status-banner warning';
+        statusBox.innerHTML = '⚠️ Plant Specimen ' + plant + ' requires balanced inputs. Adjust CO2 and H2O to optimize photosynthesis.';
+        if (!p1Unlocked) {
+          mainBtn.disabled = true;
+          mainBtn.textContent = 'Awaiting Equilibrium...';
+        }
+      }
+    } else {
+      // Phase 2: Closed loop
+      const density = parseInt(consumerDensity.value);
+      const light = parseInt(p2Light.value);
+      const plant = cropSelect.value;
+
+      // Balance condition: density roughly balances photosynthetic output
+      let targetDensity = 5;
+      if (plant === 'A') targetDensity = 6;
+      if (plant === 'C') targetDensity = 4;
+
+      const diff = Math.abs(density - targetDensity);
+      const lightPenalty = light < 50 ? (50 - light) : 0;
+
+      let o2Level = (21.0 - (density - targetDensity) * 0.8 - (lightPenalty * 0.05)).toFixed(1);
+      let co2Level = Math.round(410 + (density - targetDensity) * 45 + (lightPenalty * 3));
+
+      gCo2.textContent = co2Level + ' ppm';
+      gO2.textContent = o2Level + '%';
+      gH2o.textContent = 'Recycling 100%';
+      gH2o.style.color = 'var(--good)';
+      
+      let balancePercent = Math.max(0, 100 - (diff * 20) - (lightPenalty * 1.5));
+      gRate.textContent = Math.round(balancePercent) + '% Closed';
+
+      if (diff === 0 && light >= 50) {
+        p2Balanced = true;
+        statusBox.className = 'status-banner success';
+        statusBox.innerHTML = '🎉 Perfect Symbiosis! Cellular respiration and photosynthesis are completely balanced in a closed loop.';
+        mainBtn.disabled = false;
+        mainBtn.textContent = 'Generate Blueprint & Verification Code';
+      } else if (density > targetDensity) {
+        p2Balanced = false;
+        statusBox.className = 'status-banner warning';
+        statusBox.innerHTML = '⚠️ Respiration too high! Consumers are burning oxygen faster than Plant ' + plant + ' can produce it (O2 dropping).';
+        mainBtn.disabled = true;
+        mainBtn.textContent = 'Balance Organism Ratios';
+      } else {
+        p2Balanced = false;
+        statusBox.className = 'status-banner warning';
+        statusBox.innerHTML = '⚠️ Plant biomass exceeds consumer consumption! Plants run low on CO2. Increase consumer colony size.';
+        mainBtn.disabled = true;
+        mainBtn.textContent = 'Balance Organism Ratios';
+      }
+    }
+  }
+
+  function setPhase(p) {
+    currentPhase = p;
+    if (p === 1) {
+      tabP1.classList.add('active');
+      tabP2.classList.remove('active');
+      document.getElementById('p1-controls').classList.remove('hidden');
+      document.getElementById('p2-controls').classList.add('hidden');
+      document.getElementById('p1-input-tanks').classList.remove('hidden');
+      document.getElementById('p1-output-tanks').classList.remove('hidden');
+      document.getElementById('p2-consumer-pod').classList.add('hidden');
+      document.getElementById('p2-return-duct').classList.add('hidden');
+      document.getElementById('control-title').textContent = 'Phase 1 Controls';
+      document.getElementById('mode-badge').textContent = 'OPEN SYSTEM';
+      mainBtn.textContent = p1Unlocked ? 'Expand Bio-Dome (Enter Phase 2)' : 'Awaiting Equilibrium...';
+      mainBtn.disabled = !p1Unlocked;
+    } else {
+      tabP2.classList.add('active');
+      tabP1.classList.remove('active');
+      document.getElementById('p1-controls').classList.add('hidden');
+      document.getElementById('p2-controls').classList.remove('hidden');
+      document.getElementById('p1-input-tanks').classList.add('hidden');
+      document.getElementById('p1-output-tanks').classList.add('hidden');
+      document.getElementById('p2-consumer-pod').classList.remove('hidden');
+      document.getElementById('p2-return-duct').classList.remove('hidden');
+      document.getElementById('control-title').textContent = 'Phase 2 Closed Loop';
+      document.getElementById('mode-badge').textContent = 'CLOSED LOOP';
+      mainBtn.textContent = p2Balanced ? 'Generate Blueprint & Verification Code' : 'Balance Organism Ratios';
+      mainBtn.disabled = !p2Balanced;
+    }
+    simulate();
+  }
+
+  tabP2.addEventListener('click', () => { if (p1Unlocked) setPhase(2); });
+  tabP1.addEventListener('click', () => setPhase(1));
+
+  mainBtn.addEventListener('click', () => {
+    if (currentPhase === 1 && p1Unlocked) {
+      setPhase(2);
+    } else if (currentPhase === 2 && p2Balanced) {
+      const code = 'LUNAR-' + Math.floor(1000 + Math.random() * 9000) + '-' + cropSelect.value;
+      document.getElementById('final-code').textContent = code;
+      document.getElementById('blueprint-modal').classList.remove('hidden');
+    }
+  });
+
+  document.querySelectorAll('input, select').forEach(el => {
+    el.addEventListener('input', simulate);
+  });
+
+  setInterval(() => {
+    simDay++;
+    document.getElementById('day-counter').textContent = simDay;
+  }, 4000);
+
+  simulate();
+</script>
+</body>
+</html>
